@@ -1,59 +1,60 @@
 
-# Day 6 Assignment: School Database Design
+# School Database Design
 
-## 1. Introduction
-
-This database is designed to manage students, courses and student enrolments in a school.
-
-## 2. Tables
+## 1. Tables
 
 ### Students Table
-Stores information about students.
-- id: Primary key.
-- name: Student's full name.
-- email: Student's email address. It must be unique.
+The students table stores information about students.
+It contains:
+- id: Unique identification number for each student.
+- name: Full name of the student.
+- email: Email address of the student. Each email must be unique.
 
 ### Courses Table
-Stores information about courses.
-- id: Primary key.
-- course_name: Name of the course.
+The courses table stores information about courses.
+It contains:
+- id: Unique identification number for each course.
+- title: Name of the course.
+- teacher: Name of the teacher teaching the course.
 
 ### Enrolments Table
-Stores information about student enrolments.
-- id: Primary key.
-- student_id: Foreign key referencing students.
-- course_id: Foreign key referencing courses.
-- grade: Student's grade.
+The enrolments table stores information about students registered for courses.
+It contains:
+- student_id: Identifies the student.
+- course_id: Identifies the course.
+- grade: Stores the student's grade.
 
-## 3. Relationships
+The enrolments table uses a composite primary key made up of student_id and course_id. This prevents a student from enrolling in the same course more than once.
 
-### One-to-Many
+## 2. Relationships
 
-One student can enrol in many courses. One course can also have many students enrolled.
+Students and courses have a many-to-many relationship.
 
-### Many-to-Many
+One student can enrol in many courses, while one course can have many students.
 
-Students and courses have a many-to-many relationship because students can take several courses, and each course can have several students.
+A join table called enrolments is used to manage this relationship.
 
-The enrolments table acts as a join table connecting students and courses.
+The enrolments table creates two one-to-many relationships:
+- One student can have many enrolment records.
+- One course can have many enrolment records.
 
-## 4. Index
+The join table is necessary because it connects students to courses and stores additional information such as grades.
 
-I would create an index on student_id in the enrolments table.
+## 3. Database Index
 
-This makes searching for a student's enrolments faster.
+The database uses the following index:
 
-SQL statement:
+CREATE INDEX idx_enrolments_course
+ON enrolments(course_id);
 
-CREATE INDEX idx_enrolments_student_id
-ON enrolments(student_id);
+This index improves the speed of searching for students enrolled in a particular course. It is useful when teachers need to find all students taking their courses.
 
-## 5. SQL or NoSQL
+## 4. SQL or NoSQL?
 
-I would choose SQL because the school database contains structured information about students, courses and enrolments.
+SQL is the best choice for this school database because the information is structured and has clear relationships.
 
-SQL supports relationships, primary keys and foreign keys. It also helps maintain accurate and consistent records.
+SQL supports primary keys, foreign keys and unique constraints. These features help maintain data accuracy and prevent duplicate enrolments.
 
-## 6. Conclusion
+SQL also supports JOIN operations, which make it easier to retrieve information from different tables.
 
-The database uses three tables to manage students, courses and enrolments. Primary keys and foreign keys connect the tables and help organise school information.
+Therefore, a relational SQL database is suitable for managing students, courses, enrolments and grades.
