@@ -48,6 +48,12 @@ Average uploads per second:
 
 Therefore, the system handles approximately 12 photo uploads per second on average.
 
+Peak uploads per second:
+
+11.57 × 5 = 57.85
+
+Therefore, the system should support approximately 58 uploads per second during peak traffic.
+
 ### B. Feed views per second
 
 Each active user views 50 feed pages per day.
@@ -121,77 +127,68 @@ The database will store photo information such as photo ID, user ID, file locati
 
 ## 7. System Architecture Diagram
 
-The diagram below shows how the main components communicate.
-
 ```text
-                    USERS
-                      |
-          +-----------+-----------+
-          |                       |
-      FEED / PHOTOS            API REQUESTS
-          |                       |
-          v                       v
-         CDN                LOAD BALANCER
-          |                       |
-          v                       v
-   OBJECT STORAGE             APP SERVERS
-   (Photos and                    |
-    Thumbnails)          +--------+---------+
-                         |        |         |
-                         v        v         v
-                       CACHE   PRIMARY   MESSAGE
-                       (Redis) DATABASE   QUEUE
-                                  |
-                                  v
-                            READ REPLICA
+                         USERS
+                           |
+                    +------+------+
+                    |             |
+                 FEED          API REQUESTS
+                    |             |
+                    v             v
+                   CDN       LOAD BALANCER
+                    |             |
+                    |        +----+----+
+                    |        |         |
+                    |        v         v
+                    |     APP SERVER  APP SERVER
+                    |        |         |
+                    |        +----+----+
+                    |             |
+                    |       +-----+------+
+                    |       |            |
+                    |       v            v
+                    |     CACHE      PRIMARY DATABASE
+                    |                    |
+                    |                    v
+                    |                READ REPLICA
+                    |
+                    v
+              OBJECT STORAGE
+              (Original Photos
+               and Thumbnails)
 
-                         MESSAGE QUEUE
-                               |
-                               v
-                             WORKER
-                               |
-                               v
-                         OBJECT STORAGE
-                           (Thumbnail)
+              APP SERVER
+                   |
+                   v
+              MESSAGE QUEUE
+                   |
+                   v
+                 WORKER
+                   |
+                   v
+             OBJECT STORAGE
+               (Thumbnails)
 ```
 
 ## 8. Explanation of Each Component
 
-### 1. Content Delivery Network (CDN)
+1. **Content Delivery Network (CDN):** The CDN delivers photos and thumbnails quickly to users from servers closer to their locations.
 
-The CDN delivers photos and thumbnails quickly to users from servers closer to their locations.
+2. **Load Balancer:** The load balancer distributes incoming requests across multiple application servers to prevent one server from becoming overloaded.
 
-### 2. Load Balancer
+3. **Application Servers:** Application servers process user requests, handle photo uploads, and communicate with the database and other services.
 
-The load balancer distributes incoming requests across multiple application servers to prevent one server from becoming overloaded.
+4. **Cache:** The cache stores frequently requested information, such as popular feeds, so the application does not need to query the database every time.
 
-### 3. Application Servers
+5. **Primary Database:** The primary database stores important information such as user accounts, photo details, and relationships between users.
 
-Application servers process user requests, handle photo uploads, and communicate with the database and other services.
+6. **Database Read Replica:** The read replica handles database reading requests, reducing the workload on the primary database and improving performance.
 
-### 4. Cache
+7. **Object Storage:** Object storage keeps original photos and thumbnails separately from the database.
 
-The cache stores frequently requested information, such as popular feeds, so the application does not need to query the database every time.
+8. **Message Queue:** The message queue stores background tasks, such as thumbnail creation, until a worker is ready to process them.
 
-### 5. Primary Database
-
-The primary database stores important information such as user accounts, photo details, and relationships between users.
-
-### 6. Database Read Replica
-
-The read replica handles database reading requests, reducing the workload on the primary database and improving performance.
-
-### 7. Object Storage
-
-Object storage keeps original photos and thumbnails separately from the database.
-
-### 8. Message Queue
-
-The message queue stores background tasks, such as thumbnail creation, until a worker is ready to process them.
-
-### 9. Worker
-
-The worker processes thumbnail creation tasks, generates smaller versions of photos, and saves them in object storage.
+9. **Worker:** The worker processes thumbnail creation tasks, generates smaller versions of photos, and saves them in object storage.
 
 ## 9. Step-by-Step Photo Upload Process
 
@@ -208,7 +205,8 @@ The worker processes thumbnail creation tasks, generates smaller versions of pho
 11. The worker creates a smaller thumbnail version of the original photo.
 12. The worker saves the thumbnail in object storage.
 13. The worker updates the database with the thumbnail file location.
-14. The CDN delivers the original photo and thumbnail to users when requested.
+14. The application server returns a successful upload response to the user after the original photo and its information have been saved.
+15. The CDN delivers the original photo and thumbnail to users when requested.
 
 This process allows thumbnail creation to happen in the background without delaying the original photo upload.
 
@@ -234,24 +232,14 @@ The system must balance CDN costs with faster photo delivery.
 
 ### 3. Background Processing vs Immediate Results
 
-A message queue allows thumbnail creation to happen in the background, making photo uploads faster.
+A message queue allows thumbnail creation to happen in the background, making photo uploads faster and reducing the work performed during the main upload request.
 
-However, users may have to wait before the thumbnail becomes available.
+However, thumbnails may not be immediately available because the worker processes tasks asynchronously.
 
-The system must balance faster uploads with immediate availability of thumbnails.
-
-### 4. Caching vs Freshness
-
-Caching reduces database requests and improves application speed.
-
-However, cached information may become outdated when new photos or updates are added.
-
-The system must balance fast responses with fresh information by updating or expiring cached data.
+The system must balance faster uploads with the delay in thumbnail availability.
 
 ## 11. Conclusion
 
-SnapShare needs a scalable architecture because it has 1 million daily active users and receives many feed requests.
+SnapShare is a read-heavy application that requires a scalable architecture to handle large numbers of feed requests and photo uploads.
 
-I recommend using a CDN, load balancer, multiple application servers, caching, a primary database with a read replica, object storage, a message queue, and background workers.
-
-These components will help the system handle increased traffic, store photos efficiently, improve performance, and provide a better experience for users.
+Using a CDN, load balancer, application servers, cache, database read replica, object storage, message queue, and worker helps improve performance, reliability, and scalability.
