@@ -1,293 +1,404 @@
-# TicketHub System Design
+
+# Day 8 Assignment: Design an Event Ticketing System
 
 ## 1. Introduction
 
-TicketHub is an online ticketing website where users can view events, select seats, and purchase tickets for concerts and other events.
+TicketHub is an online ticketing website where users can browse events, view available seats, reserve seats, make payments, and access their purchased tickets.
 
-The system must support normal daily traffic and handle sudden increases in visitors when popular event tickets go on sale.
+The system must support millions of registered users and handle sudden increases in traffic when popular concerts go on sale.
+
+The main goal is to build a reliable, secure, fair, and scalable ticketing system that prevents double-booking.
 
 ## 2. Requirements
 
 ### A. Functional Requirements
 
-The system should allow users to:
+The system must allow users to:
 
-1. Register and log in.
-2. View available events.
-3. View event details, including date, venue, and ticket prices.
-4. View available and booked seats.
-5. Select and temporarily hold a seat.
-6. Purchase tickets using online payment.
-7. Receive booking confirmation and tickets.
+1. Register and log in to their accounts.
+2. Browse upcoming concerts and other events.
+3. Search for events by name, location, and date.
+4. View event details, ticket prices, and available seats.
+5. Select and temporarily hold available seats.
+6. Make payments for reserved seats.
+7. Receive confirmation after successful payment.
 8. View their purchased tickets.
+9. Cancel orders when cancellation is allowed.
+10. Receive notifications about successful purchases.
 
 ### B. Non-Functional Requirements
 
-The system should provide:
+**1. Performance:** Event pages should load quickly, and seat availability should be displayed with minimal delay.
 
-- **Performance:** Pages should load quickly.
-- **Scalability:** The system should handle many users at the same time.
-- **Availability:** The website should remain accessible during popular ticket sales.
-- **Security:** User information and payment details should be protected.
-- **Reliability:** Payments and bookings should be processed correctly.
-- **Consistency:** One seat must not be sold to two different users.
+**2. Scalability:** The system should support normal daily traffic and sudden traffic increases during popular concert sales.
 
-## 3. Traffic Estimates
+**3. Availability:** The system should remain available even when some application servers fail.
 
-TicketHub has 2 million registered users.
+**4. Correctness and Consistency:** A seat must never be sold to two different customers. Payments and orders must be recorded accurately.
+
+**5. Security:** User accounts and payment information must be protected using authentication, authorization, and secure communication.
+
+**6. Fairness:** During popular sales, users should enter through a waiting room that controls access fairly and prevents users from overwhelming the system.
+
+**7. Reliability:** Failed requests and payment interruptions should not result in lost orders or incorrect seat availability.
+
+## 3. Traffic and Storage Estimates
+
+The system has the following information:
+
+- Registered users: 2 million.
+- Normal daily visitors: 50,000.
+- Each visitor views 10 pages per day.
+- Normal ticket sales: 5,000 per day.
+- Popular concert sale: 200,000 people attempt to buy 20,000 seats within 10 minutes.
+
+There are 86,400 seconds in one day and 600 seconds in 10 minutes.
 
 ### A. Normal Daily Traffic
 
-- Daily visitors: 50,000
-- Each visitor views 10 pages.
-- Total page views: 50,000 × 10 = 500,000 page views per day.
+**1. Daily page views**
 
-Average page requests per second:
+50,000 visitors × 10 pages = 500,000 page views per day.
 
-500,000 ÷ 86,400 = approximately 5.79 requests per second.
+**2. Average page views per second**
 
-Therefore, the system handles approximately 6 page requests per second during normal daily traffic.
+500,000 ÷ 86,400 = 5.79 page views per second.
 
-Normal daily ticket sales:
+Therefore, normal traffic is approximately 6 page views per second on average.
 
-5,000 tickets ÷ 86,400 = approximately 0.058 tickets per second.
+**3. Normal ticket sales per second**
+
+5,000 ÷ 86,400 = 0.058 ticket sales per second.
+
+This is approximately 5,000 ticket sales per day.
 
 ### B. Popular Concert Sale Traffic
 
-During a popular concert sale:
+**1. Purchase attempts per second**
 
-- 200,000 people try to buy tickets.
-- Only 20,000 seats are available.
-- The sale period is 10 minutes (600 seconds).
+200,000 people ÷ 600 seconds = 333.33 attempts per second.
 
-Average incoming visitors per second:
+Therefore, the system must handle approximately 333 purchase attempts per second during the sale.
 
-200,000 ÷ 600 = approximately 333.33 visitors per second.
+**2. Tickets available per second**
 
-Average ticket sales needed per second:
+20,000 seats ÷ 600 seconds = 33.33 seats per second.
 
-20,000 ÷ 600 = approximately 33.33 tickets per second.
+The system can sell a maximum of 20,000 seats during this sale.
 
-### C. Comparison
+**3. Percentage of users who can get tickets**
 
-Normal daily visitors per second:
+20,000 ÷ 200,000 × 100 = 10%.
 
-50,000 ÷ 86,400 = 0.58 visitors per second.
+Only 10% of the people attempting to buy tickets can successfully purchase one if each person wants one seat.
 
-During a popular concert sale:
+### C. Comparing Normal Traffic and Peak Traffic
+
+The normal daily visitor arrival rate is:
+
+50,000 ÷ 86,400 = 0.579 visitors per second.
+
+The popular sale arrival rate is:
 
 200,000 ÷ 600 = 333.33 visitors per second.
 
-Comparison:
+Traffic increase:
 
-333.33 ÷ 0.58 = approximately 576 times.
+333.33 ÷ 0.579 = approximately 576 times.
 
-Therefore, the popular concert sale brings approximately 576 times more incoming visitors per second than normal daily traffic.
+Therefore, the popular concert sale creates approximately 576 times the normal visitor arrival rate.
 
-The system must be prepared for this sudden increase by using a waiting room, caching, load balancing, and database transactions.
+This means TicketHub needs a waiting room, caching, multiple application servers, and a scalable database to handle the sudden increase in traffic.
 
 ## 4. API Design
 
-An API allows the frontend and backend to communicate.
+An API allows the frontend application to communicate with the backend system.
 
-TicketHub will use the following API endpoints:
+The following endpoints support the main user activities.
 
 | Method | Endpoint | Purpose |
 |---|---|---|
-| GET | /api/events | Display all available events |
-| GET | /api/events/{eventId} | Display details of one event |
-| GET | /api/events/{eventId}/seats | Display available seats |
+| GET | /api/events | Browse available events |
+| GET | /api/events/{eventId} | View details of a specific event |
+| GET | /api/events/{eventId}/seats | View available seats |
 | POST | /api/seats/{seatId}/hold | Temporarily reserve a seat |
-| POST | /api/orders | Create a ticket order |
-| POST | /api/orders/{orderId}/pay | Process payment |
-| GET | /api/users/{userId}/tickets | Display a user's tickets |
+| POST | /api/orders | Create an order for held seats |
+| POST | /api/payments | Process payment for an order |
+| GET | /api/orders/{orderId} | View order details |
+| GET | /api/tickets | View purchased tickets |
 
-These endpoints allow users to browse events, reserve seats, make payments, and access their tickets.
+### API Explanation
+
+1. **GET /api/events:** Returns a list of upcoming events.
+
+2. **GET /api/events/{eventId}:** Returns information about a selected event, including its date, location, and ticket prices.
+
+3. **GET /api/events/{eventId}/seats:** Displays the seats available for a particular event.
+
+4. **POST /api/seats/{seatId}/hold:** Requests a temporary hold on a selected seat. The system checks availability before creating the hold.
+
+5. **POST /api/orders:** Creates an order using the user's held seats.
+
+6. **POST /api/payments:** Sends a payment request to the payment provider and records the payment result.
+
+7. **GET /api/orders/{orderId}:** Allows a user to check the status of an order.
+
+8. **GET /api/tickets:** Displays the tickets successfully purchased by the logged-in user.
+
+All purchasing endpoints require authentication. The system also uses unique request identifiers for important operations to prevent duplicate orders and payments when users retry requests.
 
 ## 5. Data Model
 
-TicketHub will use a relational database with the following tables:
+TicketHub uses a relational database because ticket purchases require accurate relationships and transactions.
+
+The main tables are Users, Events, Seats, Orders, and Payments.
 
 ### A. Users Table
 
-Stores information about registered users.
+Stores information about registered customers.
 
-- user_id (Primary Key)
-- full_name
-- email
-- password
+| Column | Description |
+|---|---|
+| user_id (PK) | Unique user identifier |
+| full_name | Customer's name |
+| email | Customer's email address |
+| password_hash | Securely stored password hash |
+| created_at | Account creation date |
 
 ### B. Events Table
 
-Stores information about events.
+Stores information about concerts and other events.
 
-- event_id (Primary Key)
-- event_name
-- event_date
-- venue
-- ticket_price
+| Column | Description |
+|---|---|
+| event_id (PK) | Unique event identifier |
+| event_name | Name of the event |
+| location | Event venue |
+| event_date | Date of the event |
+| description | Event information |
 
 ### C. Seats Table
 
-Stores information about seats available for each event.
+Stores the seats available for each event.
 
-- seat_id (Primary Key)
-- event_id (Foreign Key)
-- seat_number
-- status
+| Column | Description |
+|---|---|
+| seat_id (PK) | Unique seat identifier |
+| event_id (FK) | References Events |
+| seat_number | Seat identification number |
+| price | Ticket price |
+| status | Available, Held, or Sold |
+| held_by (FK) | User currently holding the seat |
+| hold_expires_at | Time when the temporary hold expires |
+
+A unique constraint on event_id and seat_number ensures that the same physical seat is not entered twice for one event.
 
 ### D. Orders Table
 
-Stores ticket purchase information.
+Stores customer ticket orders.
 
-- order_id (Primary Key)
-- user_id (Foreign Key)
-- seat_id (Foreign Key)
-- payment_status
-- order_date
+| Column | Description |
+|---|---|
+| order_id (PK) | Unique order identifier |
+| user_id (FK) | References Users |
+| total_amount | Total order amount |
+| order_status | Pending, Paid, or Cancelled |
+| created_at | Order creation date |
 
-### Relationships
+### E. Payments Table
 
-- One user can make many orders.
-- One event can have many seats.
-- One seat belongs to one event.
-- One order belongs to one user.
-- Each order is linked to the seat being purchased.
+Stores payment information.
+
+| Column | Description |
+|---|---|
+| payment_id (PK) | Unique payment identifier |
+| order_id (FK) | References Orders |
+| payment_reference | Unique payment reference |
+| amount | Amount paid |
+| payment_status | Pending, Successful, or Failed |
+| paid_at | Payment date and time |
+
+### Relationships Between Tables
+
+1. One user can create many orders.
+2. One event can have many seats.
+3. One user can temporarily hold seats.
+4. One order can contain one or more seats. An order_seats linking table connects orders and seats when multiple seats are purchased together.
+5. One order can have payment attempts recorded in the Payments table.
+
+The foreign keys maintain relationships between the tables and help protect data integrity.
 
 ## 6. Preventing Double-Booking
 
-TicketHub must ensure that two users cannot purchase the same seat.
+Double-booking happens when two different customers successfully purchase the same seat.
 
-I will use database transactions, row-level locking, conditional updates, and unique constraints to prevent double-booking.
+TicketHub prevents this by using database transactions, row-level locking, conditional updates, and unique constraints.
 
 ### How It Works
 
-1. A user selects a seat they want to purchase.
-2. The application starts a database transaction.
-3. The database locks the selected seat using row-level locking.
-4. The system checks whether the seat is available or whether an existing hold has expired.
-5. If the seat is available, the system changes its status to held and records the user's ID and hold expiry time.
-6. The transaction is committed so that another user cannot hold the same seat.
-7. The user completes payment before the hold expires.
-8. After successful payment, the system starts another transaction and changes the seat status from held to sold.
-9. The system creates a confirmed ticket record.
-10. If payment fails or the hold expires, the seat is released and becomes available again.
+1. A customer selects a seat.
+2. The application sends a request to the primary database.
+3. The database checks whether the seat is available.
+4. A transaction locks the selected seat row.
+5. The database changes the seat status from Available to Held only if it is still available.
+6. The system records the user holding the seat and the hold expiration time.
+7. If another customer tries to hold the same seat, the database will not allow the second request to change the already-held seat.
+8. The first customer completes payment within the allowed holding period.
+9. After successful payment, the system changes the seat status from Held to Sold.
+10. If the hold expires without successful payment, the seat becomes Available again.
 
-### Database Constraints
+### Example of a Conditional Update
 
-- A unique constraint on (event_id, seat_number) ensures that the same seat cannot be created twice for one event.
-- A unique constraint on the seat ID in the confirmed tickets table ensures that a seat cannot have two confirmed tickets.
-- A conditional database update ensures that a seat can only be held when its current status is available.
+```sql
+UPDATE Seats
+SET status = 'Held',
+    held_by = 101,
+    hold_expires_at = CURRENT_TIMESTAMP + INTERVAL '10 minutes'
+WHERE seat_id = 25
+  AND status = 'Available';
+```
 
-If two users try to reserve the same seat at the same time, the database allows only one transaction to successfully change its status to held. The other user receives a message that the seat is no longer available.
+The application checks the number of rows updated.
 
-This approach ensures that every seat is sold only once, even during a popular concert sale.
+- If one row is updated, the seat has been successfully held.
+- If zero rows are updated, the seat is no longer available and the customer must select another seat.
+
+The database transaction ensures that two customers cannot successfully hold the same seat at the same time.
+
+The system also uses a unique constraint on the event and seat combination to prevent duplicate seat records.
+
+Payment confirmation and changing the seat to Sold must be handled safely so that a seat is not sold before payment is confirmed. If payment fails or the hold expires, the reservation is released according to the payment and hold rules.
+
+This approach protects customers from purchasing seats that have already been reserved or sold.
 
 ## 7. System Architecture
+
+TicketHub uses a scalable architecture to handle normal traffic and large ticket-sale events.
 
 ### Architecture Diagram
 
 ```text
-              USERS
-                |
-                v
-          CDN / CACHE
-                |
-                v
-          WAITING ROOM
-                |
-                v
-          LOAD BALANCER
-                |
-                v
-          APPLICATION SERVERS
-                |
-                v
-             API LAYER
-                |
-        -------------------
-        |        |        |
-        v        v        v
-      CACHE   DATABASE  PAYMENT
-              SERVER    GATEWAY
-                 |
-                 v
-             READ REPLICA
+                         USERS
+                           |
+                           v
+                          CDN
+                           |
+                           v
+                     WAITING ROOM
+                           |
+                           v
+                     LOAD BALANCER
+                           |
+                +----------+----------+
+                |          |          |
+                v          v          v
+             APP       APP SERVER   APP
+           SERVER                  SERVER
+                |          |          |
+                +----------+----------+
+                           |
+             +-------------+-------------+
+             |             |             |
+             v             v             v
+           CACHE      PRIMARY DATABASE  PAYMENT
+                      (Users, Events,   SERVICE
+                       Seats, Orders,
+                       Payments)
+                           |
+                           v
+                     READ REPLICA
 ```
 
-### Explanation of Components
+### Explanation of Each Component
 
-**1. Users**
+**1. CDN (Content Delivery Network)**
 
-Users visit the website to browse events, select seats, and purchase tickets.
+The CDN delivers static content such as event posters, images, CSS, and JavaScript from servers closer to users. This reduces the workload on the main application.
 
-**2. CDN (Content Delivery Network)**
+**2. Waiting Room**
 
-The CDN delivers static content such as images, CSS, and JavaScript quickly to users.
+The waiting room controls how many users enter the ticket purchasing system during a popular concert sale. It places users in a queue and allows a limited number to proceed at a time. It helps prevent overload and promotes fair access.
 
-**3. Cache**
+**3. Load Balancer**
 
-The cache stores frequently requested information, such as event details, to reduce database requests.
+The load balancer distributes incoming requests across several application servers so that no single server handles all the traffic.
 
-**4. Waiting Room**
+**4. Application Servers**
 
-The waiting room controls the number of users entering the ticket purchasing system during a popular sale.
+Application servers process user requests such as browsing events, viewing seats, holding seats, placing orders, and checking tickets. Multiple servers allow the system to handle more users.
 
-**5. Load Balancer**
+**5. Cache**
 
-The load balancer distributes incoming requests across multiple application servers to prevent one server from becoming overloaded.
+The cache stores frequently accessed information, such as popular event details and seat availability summaries. It reduces repeated database queries and improves response time. However, the database remains the final authority for seat availability.
 
-**6. Application Servers**
+**6. Primary Relational Database**
 
-Application servers process user requests and handle the main business logic.
+The primary database stores users, events, seats, orders, and payments. It uses transactions, row-level locking, and constraints to prevent two customers from buying the same seat.
 
-**7. API Layer**
+**7. Database Read Replica**
 
-The API layer allows the frontend to communicate with backend services.
+The read replica handles read-only requests such as browsing event information. This reduces the reading workload on the primary database. Seat holds and purchases are handled by the primary database to maintain consistency.
 
-**8. Database Server**
+**8. Payment Service**
 
-The database stores users, events, seats, and orders. It ensures that ticket purchases are recorded correctly.
+The payment service communicates with the payment provider to process payments. It verifies payment results before confirming an order. Unique payment references help prevent duplicate payment processing.
 
-**9. Read Replica**
+### How the Architecture Handles a Popular Concert Sale
 
-A read replica handles read requests, such as viewing events and available seats, reducing the workload on the main database.
+When 200,000 people attempt to buy 20,000 tickets within ten minutes, the waiting room controls how many users enter the application at once.
 
-**10. Payment Gateway**
+The CDN serves static content without sending every request to the application servers. The load balancer distributes requests across multiple application servers.
 
-The payment gateway processes customer payments and sends payment results back to TicketHub.
+The cache provides frequently requested event information quickly, while the database read replica handles browsing requests.
 
-## 8. Handling High Traffic
+When a user selects a seat, the application server sends a request to the primary database. The database uses a transaction and row-level lock to ensure that only one user can hold a particular seat at a time.
 
-During a popular ticket sale, TicketHub will use the following methods:
+The payment service processes the payment. Once payment is confirmed, the database updates the order and marks the seat as Sold.
 
-1. A waiting room will control how many users enter the system.
-2. A load balancer will distribute requests across multiple servers.
-3. Caching will reduce repeated database requests.
-4. Database transactions will protect seat reservations.
-5. Read replicas will handle additional read requests.
-6. Monitoring will help identify server problems and performance issues.
+This architecture reduces overload, protects seat availability, and allows TicketHub to handle high traffic while maintaining accurate ticket records.
 
-These methods will help the system remain reliable during high traffic.
+## 8. Design Trade-Offs
 
-## 9. Design Trade-Offs
+A design trade-off occurs when improving one part of a system creates a disadvantage in another part. TicketHub must make decisions that balance performance, cost, correctness, and reliability.
 
-### A. Waiting Room vs Immediate Access
+### Trade-Off 1: Strong Consistency vs Low Latency
 
-A waiting room controls the number of users entering the system and prevents overload. However, users may have to wait before purchasing tickets.
+Strong consistency ensures that users receive accurate and up-to-date information about seat availability.
 
-### B. Consistency vs Performance
+However, checking every seat reservation against the primary database can increase response time when many people are buying tickets at once.
 
-Strong database consistency prevents two users from buying the same seat. However, database transactions and locking can make some operations slower.
+Using cached seat information can improve response speed, but cached information may become outdated.
 
-### C. Read Replicas vs Data Freshness
+**My decision:** I will use caching for event information and seat availability summaries, but all seat holds and purchases must be confirmed by the primary database using transactions. This protects against double-booking while still improving browsing performance.
 
-Read replicas improve performance by handling many read requests. However, updates may take some time to appear on replicas, meaning some information may not be immediately up to date.
+### Trade-Off 2: Relational Database vs NoSQL Database
 
-## 10. Conclusion
+A relational database provides structured tables, relationships, foreign keys, constraints, and transactions. These features are important for handling orders, payments, and seat reservations correctly.
 
-TicketHub requires a scalable and reliable system that can handle normal traffic and sudden increases during popular ticket sales.
+However, relational databases can require careful scaling and database management when traffic becomes very high.
 
-By using load balancing, caching, a waiting room, database transactions, and a payment gateway, the system can provide a good user experience.
+A NoSQL database can provide flexible data structures and can scale horizontally for some workloads, but managing complex relationships and transactions may be more difficult depending on the database.
 
-Database locking and unique constraints will also prevent double-booking and ensure that each seat is sold only once.
+**My decision:** I will use a relational database for users, events, seats, orders, and payments because ticket purchasing requires strong consistency and reliable transactions.
+
+### Trade-Off 3: Fair Waiting Room vs Immediate Access
+
+A waiting room protects the system from sudden traffic increases and gives users an orderly way to enter a popular sale.
+
+However, users may have to wait before they can purchase tickets, which can make the buying experience slower.
+
+Allowing everyone to enter immediately may feel faster, but it can overload the application and database.
+
+**My decision:** I will use a waiting room during popular sales. It will admit users at a controlled rate and provide queue information so users understand their position and progress.
+
+## 9. Conclusion
+
+TicketHub requires a scalable and reliable architecture to support millions of registered users and sudden increases in traffic during popular concert sales.
+
+The design uses a CDN, waiting room, load balancer, multiple application servers, cache, relational database, read replica, and payment service.
+
+Transactions, row-level locking, conditional updates, and unique constraints prevent double-booking.
+
+The design trade-offs balance performance, consistency, fairness, and reliability.
+
+With these components working together, TicketHub can provide a secure and dependable ticket purchasing experience for customers.
